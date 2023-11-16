@@ -1,32 +1,70 @@
-// Optimize this function
-void singleThread( int input_row, 
-                int input_col,
-                int *input, 
-                int kernel_row, 
-                int kernel_col, 
-                int *kernel,
-                int output_row, 
-                int output_col, 
-                long long unsigned int *output ) 
-{
-    
-    for(int i = 0; i < output_row * output_col; ++i)
-        output[i] = 0;
+#include<algorithm>
+#include <iostream>
+#include "utility.h"
 
-    for(int output_i = 0; output_i< output_row; output_i++)
-    {
-        for(int output_j = 0; output_j< output_col; output_j++)
-        {
-            for(int kernel_i = 0; kernel_i< kernel_row; kernel_i++)
-            {
-                for(int kernel_j = 0; kernel_j< kernel_col; kernel_j++)
-                {
-                    int input_i = (output_i + 2*kernel_i) % input_row;
-                    int input_j = (output_j + 2*kernel_j) % input_col;
-                    output[output_i * output_col + output_j] += input[input_i*input_col +input_j] 
-                                                                * kernel[kernel_i*kernel_col +kernel_j];
-                }
-            }
+#define ull unsigned long long int
+
+// Optimize this function
+void singleThread( int input_row_size, int input_col_size, int *input, 
+                int kernel_row_size, int kernel_col_size, int *kernel,
+                int output_row_size, int output_col_size, ull *output) 
+{
+        
+        int output_row_half_addr, output_col_half_addr;
+        int partial_output_row_half_addr, partial_output_col_half_addr;
+        int row_offset, col_offset;
+
+        //create four sub-blocks of input with padding
+        int padded_input_row_size = input_row_size + 1*kernel_row_size;
+        int padded_input_col_size = input_col_size + 1*kernel_col_size;
+        int quarter_input_row_sizes[4] = {(padded_input_row_size+1)/2, (padded_input_row_size+1)/2, (padded_input_row_size)/2, (padded_input_row_size)/2};
+        int quarter_input_col_sizes[4] = {(padded_input_col_size+1)/2, (padded_input_col_size)/2, (padded_input_col_size+1)/2, (padded_input_col_size)/2};
+
+        int quarter_output_row_sizes[4] = {(output_row_size+1)/2, (output_row_size+1)/2, (output_row_size)/2, (output_row_size)/2};
+        int quarter_output_col_sizes[4] = {(output_col_size+1)/2, (output_col_size)/2, (output_col_size+1)/2, (output_col_size)/2};
+        
+        int *quarter_inputs[4];
+        ull *quarter_outputs[4];
+        
+        // create four sub-blocks of output
+        for(int i=0; i<4; ++i) {
+                quarter_inputs[i] = new int[quarter_input_row_sizes[i] * quarter_input_col_sizes[i]]; // new array to store each of the input matrix with padding.
+                row_offset = i>>1;
+                col_offset = i&1;
+                createQuarterArray(input_row_size, input_col_size, input,
+                                quarter_input_row_sizes[i], quarter_input_col_sizes[i], quarter_inputs[i]
+                                , row_offset, col_offset); // fill one of the four subblocks of the input matrix with padding
+                quarter_outputs[i] = new ull[quarter_output_row_sizes[i] * quarter_output_col_sizes[i]](); // new array to st
+                convolute(quarter_input_row_sizes[i], quarter_input_col_sizes[i], quarter_inputs[i],
+                                kernel_row_size, kernel_col_size, kernel,
+                                0, quarter_output_row_sizes[i], quarter_output_col_sizes[i], quarter_outputs[i]); //basic convolution
+                //std::cout << "input\n";
+                //printArrayShortInt(quarter_input_row_sizes[i], quarter_input_col_sizes[i], quarter_inputs[i]);
+                //std::cout << "output\n";
+                //printArray(quarter_output_row_sizes[i], quarter_output_col_sizes[i], quarter_outputs[i]);
+                delete [] quarter_inputs[i];
         }
-    }
+
+
+        // merge back the four output blocks
+        for(int i=0; i<4; ++i) {
+                row_offset = i>>1;
+                col_offset = i&1;
+                output_row_half_addr = row_offset * output_col_size;
+                partial_output_row_half_addr = 0;
+                for(int row=0; row<quarter_output_row_sizes[i]; ++row) {
+                        output_col_half_addr = output_row_half_addr + col_offset;
+                        partial_output_col_half_addr = partial_output_row_half_addr;
+                        for(int col=0; col<quarter_output_col_sizes[i]; ++col) {
+                                output[output_col_half_addr] = quarter_outputs[i][partial_output_col_half_addr];
+                                output_col_half_addr += 2;
+                                partial_output_col_half_addr += 1;
+                        }
+                        output_row_half_addr += output_col_size<<1;
+                        partial_output_row_half_addr += quarter_output_col_sizes[i];
+                }
+                delete [] quarter_outputs[i];
+        }
+        //printArray(output_row_size, output_col_size, output);
+        return;
 }
