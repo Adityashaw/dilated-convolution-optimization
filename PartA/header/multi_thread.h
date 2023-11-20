@@ -10,8 +10,8 @@ struct ThreadData {
         int num_threads;
         int input_row_size;
         int input_col_size;
-        int *input;
-        int *kernel;
+        short int *input;
+        short int *kernel;
         int kernel_row_size;
         int kernel_col_size;
         int output_row_size;
@@ -28,8 +28,8 @@ void *threadInsideQuarterOutput(void *arg)
         int num_threads = data->num_threads;
         int input_row_size = data->input_row_size;
         int input_col_size = data->input_col_size;
-        int *input = data->input;
-        int *kernel = data->kernel;
+        short int *input = data->input;
+        short int *kernel = data->kernel;
         int kernel_row_size = data->kernel_row_size;
         int kernel_col_size = data->kernel_col_size;
         int output_row_size = data->output_row_size;
@@ -57,8 +57,8 @@ void *threadForQuarterOutput(void *arg)
         int thread_id = data->thread_id;
         int input_row_size = data->input_row_size;
         int input_col_size = data->input_col_size;
-        int *input = data->input;
-        int *kernel = data->kernel;
+        short int *input = data->input;
+        short int *kernel = data->kernel;
         int kernel_row_size = data->kernel_row_size;
         int kernel_col_size = data->kernel_col_size;
         int output_row_size = data->output_row_size;
@@ -113,14 +113,20 @@ void *threadForQuarterOutput(void *arg)
 }
 
 
-void multiThread(int input_row_size, int input_col_size, int *input,
+void multiThread(int input_row_size, int input_col_size, int *input, 
                 int kernel_row_size, int kernel_col_size, int *kernel,
-                int output_row_size, int output_col_size, ull *output)
+                int output_row_size, int output_col_size, ull *output) 
 {
         int output_row_half_addr, output_col_half_addr;
         int partial_output_row_half_addr, partial_output_col_half_addr;
         int row_offset, col_offset;
- 
+
+        short int* kernel2 = new short int[kernel_row_size * kernel_col_size];
+        for(int i=0; i<kernel_row_size; ++i) {
+                for(int j=0; j<kernel_col_size; ++j) {
+                        kernel2[i*kernel_col_size + j] = (short int)kernel[i*kernel_col_size + j];
+                }
+        }
         //create four sub-blocks of input with padding
         int padded_input_row_size = input_row_size + 1*kernel_row_size;
         int padded_input_col_size = input_col_size + 1*kernel_col_size;
@@ -130,7 +136,7 @@ void multiThread(int input_row_size, int input_col_size, int *input,
         int quarter_output_row_sizes[4] = {(output_row_size+1)/2, (output_row_size+1)/2, (output_row_size)/2, (output_row_size)/2};
         int quarter_output_col_sizes[4] = {(output_col_size+1)/2, (output_col_size)/2, (output_col_size+1)/2, (output_col_size)/2};
 
-        int *quarter_inputs[4];
+        short int *quarter_inputs[4];
         ull *quarter_outputs[4];
 
         int num_threads = 4;
@@ -138,7 +144,7 @@ void multiThread(int input_row_size, int input_col_size, int *input,
 
         // create four sub-blocks of output
         for(int i=0; i<4; ++i) {
-                quarter_inputs[i] = new int[quarter_input_row_sizes[i] * quarter_input_col_sizes[i]]; // new array to store each of the input matrix with padding.
+                quarter_inputs[i] = new short int[quarter_input_row_sizes[i] * quarter_input_col_sizes[i]]; // new array to store each of the input matrix with padding.
                 row_offset = i>>1;
                 col_offset = i&1;
                 createQuarterArray(input_row_size, input_col_size, input,
@@ -151,7 +157,7 @@ void multiThread(int input_row_size, int input_col_size, int *input,
                         thread_data->input_row_size = quarter_input_row_sizes[i];
                         thread_data->input_col_size = quarter_input_col_sizes[i];
                         thread_data->input = quarter_inputs[i];
-                        thread_data->kernel = kernel;
+                        thread_data->kernel = kernel2;
                         thread_data->kernel_row_size = kernel_row_size;
                         thread_data->kernel_col_size = kernel_col_size;
                         thread_data->output_row_size = quarter_output_row_sizes[i];
