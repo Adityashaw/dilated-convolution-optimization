@@ -5,6 +5,7 @@
 
 #define ull unsigned long long int
 
+// structure to pass data to thread
 struct ThreadData {
         int thread_id;
         int num_threads;
@@ -19,6 +20,22 @@ struct ThreadData {
         ull *output;
 };
 
+// wrapper structure to pass data to thread
+struct WrapperThreadData {
+        int thread_id;
+        int num_threads;
+        int input_row_size;
+        int input_col_size;
+        int *input;
+        short int *kernel;
+        int kernel_row_size;
+        int kernel_col_size;
+        int output_row_size;
+        int output_col_size;
+        ull *output;
+};
+
+// actual thread function which performs convolution
 void *threadInsideQuarterOutput(void *arg)
 {
         ThreadData *data = static_cast<ThreadData *>(arg);
@@ -51,24 +68,21 @@ void *threadInsideQuarterOutput(void *arg)
 
 void *threadForQuarterOutput(void *arg)
 {
-        ThreadData *data = static_cast<ThreadData *>(arg);
+        WrapperThreadData *data = static_cast<WrapperThreadData *>(arg);
 
         // Local variables to read from the thread data
         int thread_id = data->thread_id;
         int input_row_size = data->input_row_size;
         int input_col_size = data->input_col_size;
-        short int *input = data->input;
+        int *input = data->input;
         short int *kernel = data->kernel;
         int kernel_row_size = data->kernel_row_size;
         int kernel_col_size = data->kernel_col_size;
         int output_row_size = data->output_row_size;
         int output_col_size = data->output_col_size;
         ull *output = data->output;
-        //std::cout << "input row:col" << input_row_size << " " << input_col_size << std::endl;
-        //std::cout << "kernel row:col" << kernel_row_size << " " << kernel_col_size << std::endl;
 
         int num_cores = getNumCores();
-        //std::cout << "num cores : " << num_cores << std::endl;
 
         if (num_cores == 0) {
                 // Unable to determine the number of cores
@@ -77,16 +91,30 @@ void *threadForQuarterOutput(void *arg)
         }
         num_cores /= 4;
 
-        int num_threads = std::max(1, num_cores); //std::max(12, good_thread_count); //num_cores;
+        int num_threads = std::max(1, num_cores);
         pthread_t threads[num_threads];
+        //create one of the four sub-blocks of input with padding
+        int padded_input_row_size = input_row_size + 1*kernel_row_size;
+        int padded_input_col_size = input_col_size + 1*kernel_col_size;
+        int quarter_input_row_sizes[4] = {(padded_input_row_size+1)/2, (padded_input_row_size+1)/2, (padded_input_row_size)/2, (padded_input_row_size)/2};
+        int quarter_input_col_sizes[4] = {(padded_input_col_size+1)/2, (padded_input_col_size)/2, (padded_input_col_size+1)/2, (padded_input_col_size)/2};
+
+        short int *quarter_input =
+            new short int[quarter_input_row_sizes[thread_id] *
+                          quarter_input_col_sizes[thread_id]]; // new array to store each of the input matrix with padding.
+        register int row_offset = thread_id >> 1;
+        register int col_offset = thread_id & 1;
+        createQuarterArray(input_row_size, input_col_size, input, quarter_input_row_sizes[thread_id],
+                           quarter_input_col_sizes[thread_id], quarter_input, row_offset,
+                           col_offset); // fill one of the four subblocks of the input matrix with padding
 
         for (int thread_i = 0; thread_i < num_threads; ++thread_i) {
                 ThreadData *thread_data = new ThreadData;
                 thread_data->thread_id = thread_i;
                 thread_data->num_threads = num_threads;
-                thread_data->input_row_size = input_row_size;
-                thread_data->input_col_size = input_col_size;
-                thread_data->input = input;
+                thread_data->input_row_size = quarter_input_row_sizes[thread_id];
+                thread_data->input_col_size = quarter_input_col_sizes[thread_id];
+                thread_data->input = quarter_input;
                 thread_data->kernel = kernel;
                 thread_data->kernel_row_size = kernel_row_size;
                 thread_data->kernel_col_size = kernel_col_size;
@@ -107,8 +135,8 @@ void *threadForQuarterOutput(void *arg)
                 pthread_join(threads[i], NULL);
         }
         
-        delete [] input;
-        
+        delete [] quarter_input;
+
         pthread_exit(NULL);
 }
 
@@ -122,41 +150,24 @@ void multiThread(int input_row_size, int input_col_size, int *input,
         int row_offset, col_offset;
 
         short int* kernel2 = new short int[kernel_row_size * kernel_col_size];
-        for(int i=0; i<kernel_row_size; ++i) {
-                for(int j=0; j<kernel_col_size; ++j) {
-                        kernel2[i*kernel_col_size + j] = (short int)kernel[i*kernel_col_size + j];
-                }
-        }
-        //create four sub-blocks of input with padding
-        int padded_input_row_size = input_row_size + 1*kernel_row_size;
-        int padded_input_col_size = input_col_size + 1*kernel_col_size;
-        int quarter_input_row_sizes[4] = {(padded_input_row_size+1)/2, (padded_input_row_size+1)/2, (padded_input_row_size)/2, (padded_input_row_size)/2};
-        int quarter_input_col_sizes[4] = {(padded_input_col_size+1)/2, (padded_input_col_size)/2, (padded_input_col_size+1)/2, (padded_input_col_size)/2};
+        copyKernel(kernel_row_size, kernel_col_size, kernel, kernel2);
 
+        ull *quarter_outputs[4];
         int quarter_output_row_sizes[4] = {(output_row_size+1)/2, (output_row_size+1)/2, (output_row_size)/2, (output_row_size)/2};
         int quarter_output_col_sizes[4] = {(output_col_size+1)/2, (output_col_size)/2, (output_col_size+1)/2, (output_col_size)/2};
-
-        short int *quarter_inputs[4];
-        ull *quarter_outputs[4];
 
         int num_threads = 4;
         pthread_t threads[num_threads];
 
         // create four sub-blocks of output
         for(int i=0; i<4; ++i) {
-                quarter_inputs[i] = new short int[quarter_input_row_sizes[i] * quarter_input_col_sizes[i]]; // new array to store each of the input matrix with padding.
-                row_offset = i>>1;
-                col_offset = i&1;
-                createQuarterArray(input_row_size, input_col_size, input,
-                                quarter_input_row_sizes[i], quarter_input_col_sizes[i], quarter_inputs[i]
-                                , row_offset, col_offset); // fill one of the four subblocks of the input matrix with padding
                 quarter_outputs[i] = new ull[quarter_output_row_sizes[i] * quarter_output_col_sizes[i]](); // new array to st
-                        ThreadData *thread_data = new ThreadData;
+                        WrapperThreadData *thread_data = new WrapperThreadData;
                         thread_data->thread_id = i;
                         thread_data->num_threads = 4;
-                        thread_data->input_row_size = quarter_input_row_sizes[i];
-                        thread_data->input_col_size = quarter_input_col_sizes[i];
-                        thread_data->input = quarter_inputs[i];
+                        thread_data->input_row_size = input_row_size;
+                        thread_data->input_col_size = input_col_size;
+                        thread_data->input = input;
                         thread_data->kernel = kernel2;
                         thread_data->kernel_row_size = kernel_row_size;
                         thread_data->kernel_col_size = kernel_col_size;
@@ -169,8 +180,6 @@ void multiThread(int input_row_size, int input_col_size, int *input,
                                 std::cerr << "Error creating thread: " << rc << std::endl;
                                 std::exit(-1);
                         }
-                //printArrayInt(quarter_input_row_sizes[i], quarter_input_col_sizes[i], quarter_inputs[i]);
-                //printArray(quarter_output_row_sizes[i], quarter_output_col_sizes[i], quarter_outputs[i]);
         }
 
 
