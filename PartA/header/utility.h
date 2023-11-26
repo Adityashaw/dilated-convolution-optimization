@@ -38,10 +38,10 @@ force_inline void convolute(register int input_row_size, register int input_col_
     register int input_row_half_addr, output_row_half_addr;
     register int input_row_half_addr2, output_row_half_addr2;
     // int kernel_col_size_padded_32 = kernel_col_size - kernel_col_size % 32;
-    register int kernel_col_size_padded_16 = kernel_col_size - kernel_col_size % 16;
-    register int kernel_col_size_padded_8 = kernel_col_size - kernel_col_size % 8;
-    register int kernel_col_size_padded_4 = kernel_col_size - kernel_col_size % 4;
-    register int output_row_size_padded_2 = output_row_end - output_row_end % 2;
+    register int kernel_col_size_padded_16 = kernel_col_size - 16;
+    register int kernel_col_size_padded_8 = kernel_col_size - 8;
+    register int kernel_col_size_padded_4 = kernel_col_size - 4;
+    register int output_row_size_padded_2 = output_row_end - 2;
     register ull temp_output, temp_output2;
 
     output_row_half_addr = output_row_start * output_col_size;
@@ -263,10 +263,10 @@ static force_inline void copy8IntTo8ShortIntTwiceUsingTwoIndices(int array_idx, 
 
 force_inline void copyKernel(int kernel_col_size, int kernel_row_size, int *kernel, short int *kernel2)
 {
-    register int kernel_col_size_padded_16 = kernel_col_size - kernel_col_size % 16;
-    register int kernel_col_size_padded_8 = kernel_col_size - kernel_col_size % 8;
-    register int kernel_col_size_padded_4 = kernel_col_size - kernel_col_size % 4;
-    register int kernel_row_size_padded_2 = kernel_row_size - kernel_row_size % 2;
+    register int kernel_col_size_padded_16 = kernel_col_size - 16;
+    register int kernel_col_size_padded_8 = kernel_col_size - 8;
+    register int kernel_col_size_padded_4 = kernel_col_size - 4;
+    register int kernel_row_size_padded_2 = kernel_row_size - 2;
     register int kernel_idx = 0, kernel_idx2 = kernel_col_size;
     register int row, col;
     row = 0;
