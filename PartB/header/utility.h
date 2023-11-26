@@ -1,3 +1,6 @@
+#pragma once
+#pragma GCC diagnostic ignored "-Wregister"
+
 #include <iostream>
 
 #define ull unsigned long long int
@@ -17,7 +20,8 @@ void createQuarterArray(register int input_row_size, register int input_col_size
     output_row_half_addr = 0;
     for (row = 0; row <= limit_row; ++row)
     {
-        col = 0; temp_col = col_offset;
+        col = 0;
+        temp_col = col_offset;
         for (; col <= limit_col - 4; col += 4, temp_col += 8)
         {
             output[output_row_half_addr + col] = input[input_row_half_addr + temp_col];
@@ -52,7 +56,6 @@ void createQuarterArray(register int input_row_size, register int input_col_size
         output_row_half_addr += output_col_size;
     }
 }
-
 
 void printArray(int array_row_size, int array_col_size, ull *array)
 {
